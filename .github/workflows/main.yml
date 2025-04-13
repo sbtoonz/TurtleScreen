@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest  # Change to 'windows-latest' if needed
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: firmware-bin
           path: ./downloaded  # Save the artifact into a specific folder
