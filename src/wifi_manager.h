@@ -26,7 +26,11 @@ void saveCredentials(const String& ssid, const String& password, const String& h
 
 extern String targetSSID;
 extern String targetPassword;
+extern String targetSSID;
+extern String targetPassword;
 extern String targetHost;
 extern String apiURL;
+
+
 
 #endif // WIFI_MANAGER_H

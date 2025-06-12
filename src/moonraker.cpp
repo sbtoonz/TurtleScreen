@@ -156,8 +156,12 @@ void MOONRAKER::get_printer_info(void) {
             data.pause = json_parse["state"]["flags"]["pausing"].as<bool>() ||
                          json_parse["state"]["flags"]["paused"].as<bool>();
             data.printing = json_parse["state"]["flags"]["printing"].as<bool>() ||
-                            json_parse["state"]["flags"]["cancelling"].as<bool>() || 
-                            data.pause;
+                            json_parse["state"]["flags"]["cancelling"].as<bool>() || data.pause;
+            data.pause = json_parse["state"]["flags"]["pausing"].as<bool>();
+            data.pause |= json_parse["state"]["flags"]["paused"].as<bool>();
+            data.printing = json_parse["state"]["flags"]["printing"].as<bool>(); 
+            data.printing |= json_parse["state"]["flags"]["cancelling"].as<bool>();
+            data.printing |= data.pause;
             data.bed_actual = int16_t(json_parse["temperature"]["bed"]["actual"].as<double>() + 0.5f);
             data.bed_target = int16_t(json_parse["temperature"]["bed"]["target"].as<double>() + 0.5f);
             data.nozzle_actual = int16_t(json_parse["temperature"]["tool0"]["actual"].as<double>() + 0.5f);
@@ -234,10 +238,6 @@ void MOONRAKER::get_progress(void)
 
 void MOONRAKER::get_AFC_status(void)
 {
-    #if 1
-        return;   // _AFC_Status is no longer a gcode_macro, so polling this does not make any sense any longer
-    #endif
-    
     http.begin("http://" + targetHost + "/printer/objects/query?gcode_macro%20_AFC_STATUS");
     int httpresponsecode = http.GET();
     if (httpresponsecode > 0)

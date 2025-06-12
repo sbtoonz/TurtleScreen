@@ -8,12 +8,10 @@
 #include "debug.hpp"
 
 extern float eventTime;
-
-#define NUM_LEGS    12   // TODO: support dynamic number of legs/lanes
-extern bool legLoad[NUM_LEGS];
-extern int  legLane[NUM_LEGS];
-extern int  legMapTool[NUM_LEGS];
-
+extern bool leg1Load;
+extern bool leg2Load;
+extern bool leg3Load;
+extern bool leg4Load;
 extern const char* currentLoad;
 extern char currentLoadBuffer[32];
 extern bool toolLoaded;

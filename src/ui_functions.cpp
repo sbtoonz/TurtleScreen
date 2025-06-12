@@ -5,7 +5,7 @@ lv_obj_t *gif_img;
 lv_color_t color;
 
 int colorChangeState = -1;
-int selected = -1;
+int selectedTool = -1;
 
 void toolChangeCall(lv_event_t * e, int toolNo){
     char command[10];
@@ -75,15 +75,15 @@ void saveColorWheel(lv_event_t * e){
     color = lv_colorwheel_get_rgb(ui_Colorwheel1);
 }
 
-void SetToolActive(lv_event_t * e, int tool){
+void SetLaneActive(lv_event_t * e, int laneActive){
     char command[10];
-    snprintf(command, sizeof(command), "T%d", tool);
+    snprintf(command, sizeof(command), "t%d", laneActive);
     moonraker.post_gcode_to_queue(command);
 }
 
-void EjectLane(lv_event_t * e, int lane){
-    char command[40];  // buffer length of 20 was too short for BT_LANE_EJECT LANE=%d
-    snprintf(command, sizeof(command), "BT_LANE_EJECT LANE=%d", lane);
+void EjectLane(lv_event_t * e, int laneEject){
+    char command[20];
+    snprintf(command, sizeof(command), "BT_LANE_EJECT LANE=%d", laneEject);
     moonraker.post_gcode_to_queue(command);
     
 }

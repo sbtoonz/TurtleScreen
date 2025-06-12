@@ -34,10 +34,7 @@ uint32_t lv_color_to_hex(lv_color_t color) {
 }
 
 void lvgl_set_current_leg() {
-   if (strlen(currentLoadBuffer) == 5) 
-        activeLane = atoi(&currentLoadBuffer[4]);
-   else 
-        activeLane = -1;
+   if (currentLoadBuffer != nullptr)activeLane = atoi(&currentLoadBuffer[3]);
 }
 
 void lvgl_set_tool_status(){
@@ -74,11 +71,14 @@ void lvgl_set_active_lane_color(){
 }
 
 void lvgl_set_leg_status(){
-    assert(NUM_LEGS == 4);  // TODO: support dynamic number of legs/lanes
-    lv_obj_set_style_bg_color(ui_Tool0Button, legLoad[0] ? loadedColor : unloadedColor, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(ui_Tool1Button, legLoad[1] ? loadedColor : unloadedColor, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(ui_Tool2Button, legLoad[2] ? loadedColor : unloadedColor, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(ui_Tool3Button, legLoad[3] ? loadedColor : unloadedColor, LV_PART_MAIN);
+    if(leg1Load){lv_obj_set_style_bg_color(ui_Tool0Button, loadedColor, LV_PART_MAIN);}
+    else{lv_obj_set_style_bg_color(ui_Tool0Button, unloadedColor, LV_PART_MAIN);}
+    if(leg2Load){lv_obj_set_style_bg_color(ui_Tool1Button, loadedColor, LV_PART_MAIN);}
+    else{lv_obj_set_style_bg_color(ui_Tool1Button, unloadedColor, LV_PART_MAIN);}
+    if(leg3Load){lv_obj_set_style_bg_color(ui_Tool2Button, loadedColor, LV_PART_MAIN);}
+    else{lv_obj_set_style_bg_color(ui_Tool2Button, unloadedColor, LV_PART_MAIN);}
+    if(leg4Load){lv_obj_set_style_bg_color(ui_Tool3Button, loadedColor, LV_PART_MAIN);}
+    else{lv_obj_set_style_bg_color(ui_Tool3Button, unloadedColor, LV_PART_MAIN);}
     lvgl_set_active_lane_color();
 }
 
