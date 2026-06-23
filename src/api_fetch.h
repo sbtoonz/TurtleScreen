@@ -7,18 +7,34 @@
 #include "moonraker.h"
 #include "debug.hpp"
 
+#define MAX_LANES 4
+#define LANE_NAME_LEN 16
+
+struct LaneStatus {
+    char name[LANE_NAME_LEN];
+    char map[8];
+    bool load;
+    bool prep;
+    bool tool_loaded;
+    bool loaded_to_hub;
+    char material[16];
+    char color[12];
+    float weight;
+    int spool_id;
+    int lane_index;
+};
+
 extern float eventTime;
-extern bool leg1Load;
-extern bool leg2Load;
-extern bool leg3Load;
-extern bool leg4Load;
+extern LaneStatus lanes[MAX_LANES];
+extern int numLanesFound;
 extern const char* currentLoad;
 extern char currentLoadBuffer[32];
 extern bool toolLoaded;
-extern bool loadedToHub;
+extern bool hubLoaded;
 extern bool currentLoadChanged;
 extern int numUnits;
 extern int numLanes;
+extern char unitType[24];
 
 void fetchDataTask(void *pvParameters);
 void ParseAPIResponse(const String& jsonResponse);

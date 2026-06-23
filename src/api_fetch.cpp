@@ -2,19 +2,19 @@
 
 String apiURL;
 float eventTime;
-bool leg1Load;
-bool leg2Load;
-bool leg3Load;
-bool leg4Load;
+LaneStatus lanes[MAX_LANES];
+int numLanesFound;
 const char *currentLoad;
 bool toolLoaded;
-bool loadedToHub;
+bool hubLoaded;
 bool currentLoadChanged;
 char currentLoadBuffer[32] = "";
 int numUnits;
 int numLanes;
+char unitType[24] = "";
 uint32_t lastApiUpdate;
 HTTPClient http;
+
 void fetchDataTask(void *pvParameters)
 {
     while (true)
@@ -34,7 +34,6 @@ void fetchDataTask(void *pvParameters)
                 DEBUG_PRINTLN("Received data:");
                 DEBUG_PRINTLN(payload);
 #endif
-                // Parse JSON data
                 ParseAPIResponse(payload);
             }
             else
@@ -64,7 +63,7 @@ void fetchDataTask(void *pvParameters)
 
 void ParseAPIResponse(const String &jsonResponse) {
     DEBUG_PRINTLN("Running API Parse");
-    DynamicJsonDocument doc(4096); // Adjusted size as necessary
+    DynamicJsonDocument doc(8192);
     DeserializationError error = deserializeJson(doc, jsonResponse);
 
     if (error) {
@@ -73,99 +72,110 @@ void ParseAPIResponse(const String &jsonResponse) {
         return;
     }
 
-    JsonObject result = doc["result"];
-    if (result.isNull()) {
-        DEBUG_PRINTLN("Result key not found in JSON.");
+    // The webhook returns {"status:": {"AFC": { ... }}}
+    JsonObject afc = doc["status:"]["AFC"];
+    if (afc.isNull()) {
+        // Fallback: try without colon in case firmware changes
+        afc = doc["status"]["AFC"];
+    }
+    if (afc.isNull()) {
+        DEBUG_PRINTLN("AFC key not found in response.");
         return;
     }
 
-    eventTime = result["eventtime"].as<float>();
-
-    JsonObject status = result["status"];
-    JsonObject afc = status["AFC"];
-    JsonObject turtleUnit;
-    String turtleUnitName;
+    // Find the first unit (e.g. "Turtle_1")
+    JsonObject unitObj;
+    String unitName;
     for (JsonPair kv : afc) {
-        turtleUnitName = kv.key().c_str();  
-        turtleUnit = kv.value().as<JsonObject>();
-        break; 
+        String key = kv.key().c_str();
+        if (key == "system") continue;
+        unitObj = kv.value().as<JsonObject>();
+        unitName = key;
+        break;
     }
 
-    if (!turtleUnit.isNull()) {
-        DEBUG_PRINT(turtleUnitName + " Object: ");
-        // Iterate through the legs (leg1, leg2, leg3, leg4)
-        for (int leg = 1; leg <= 4; ++leg) {
-            String legKey = "leg" + String(leg);
-            if (turtleUnit.containsKey(legKey)) {
-                JsonObject legData = turtleUnit[legKey];
-                bool load = legData["load"];
-                bool prep = legData["prep"];
-                bool loadedToHub = legData["loaded_to_hub"];
-                String material = legData["material"].as<String>();
-                String spool_id = legData["spool_id"].as<String>();
-                String color = legData["color"].as<String>();
-                float weight = legData["weight"].as<float>();
-
-                int lane = legData["LANE"];
-                DEBUG_PRINT("Lane ");
-                DEBUG_PRINT(lane);
-                DEBUG_PRINT(" - Load: ");
-                DEBUG_PRINT(load ? "true" : "false");
-                DEBUG_PRINT(", Prep: ");
-                DEBUG_PRINT(prep ? "true" : "false");
-                DEBUG_PRINT(", Loaded to Hub: ");
-                DEBUG_PRINT(loadedToHub ? "true" : "false");
-                DEBUG_PRINT(", Material: ");
-                DEBUG_PRINT(material);
-                DEBUG_PRINT(", Spool ID: ");
-                DEBUG_PRINT(spool_id);
-                DEBUG_PRINT(", Color: ");
-                DEBUG_PRINT(color);
-                DEBUG_PRINT(", Weight: ");
-                DEBUG_PRINTLN(weight);
-                // Update leg load statuses
-                switch (lane) {
-                    case 1:
-                        leg1Load = load;
-                        break;
-                    case 2:
-                        leg2Load = load;
-                        break;
-                    case 3:
-                        leg3Load = load;
-                        break;
-                    case 4:
-                        leg4Load = load;
-                        break;
-                    default:
-                        break;
-                }
-            } else {
-                DEBUG_PRINT("Checking key: ");
-                DEBUG_PRINTLN(legKey);
-                DEBUG_PRINTLN("Key not found.");
+    if (!unitObj.isNull()) {
+        // Get unit system info
+        JsonObject unitSystem = unitObj["system"];
+        if (!unitSystem.isNull()) {
+            hubLoaded = unitSystem["hub_loaded"].as<bool>();
+            const char *type = unitSystem["type"];
+            if (type) {
+                strncpy(unitType, type, sizeof(unitType) - 1);
+                unitType[sizeof(unitType) - 1] = '\0';
             }
+            DEBUG_PRINT("Unit type: ");
+            DEBUG_PRINTLN(unitType);
+            DEBUG_PRINT("Hub loaded: ");
+            DEBUG_PRINTLN(hubLoaded ? "true" : "false");
         }
 
-        // Parsing Turtle Unit's system information (hub_loaded, etc.)
-        JsonObject turtleSystem = turtleUnit["system"];
-        if (!turtleSystem.isNull()) {
-            bool hubLoaded = turtleSystem["hub_loaded"].as<bool>();
-            bool canCut = turtleSystem["can_cut"].as<bool>();
-            String screen = turtleSystem["screen"].as<String>();
-            DEBUG_PRINT("Hub Loaded: ");
-            DEBUG_PRINTLN(hubLoaded ? "true" : "false");
-            DEBUG_PRINT("Can Cut: ");
-            DEBUG_PRINTLN(canCut ? "true" : "false");
-            DEBUG_PRINT("Screen: ");
-            DEBUG_PRINTLN(screen);
-            loadedToHub = hubLoaded; // Assigning hubLoaded status to toolLoaded if relevant
+        // Iterate lanes within the unit (skip "system" key)
+        numLanesFound = 0;
+        for (JsonPair kv : unitObj) {
+            String key = kv.key().c_str();
+            if (key == "system") continue;
+            if (numLanesFound >= MAX_LANES) break;
+
+            JsonObject laneData = kv.value().as<JsonObject>();
+            LaneStatus &lane = lanes[numLanesFound];
+
+            strncpy(lane.name, key.c_str(), LANE_NAME_LEN - 1);
+            lane.name[LANE_NAME_LEN - 1] = '\0';
+
+            const char *mapVal = laneData["map"];
+            if (mapVal) {
+                strncpy(lane.map, mapVal, sizeof(lane.map) - 1);
+                lane.map[sizeof(lane.map) - 1] = '\0';
+            } else {
+                lane.map[0] = '\0';
+            }
+
+            lane.load = laneData["load"].as<bool>();
+            lane.prep = laneData["prep"].as<bool>();
+            lane.tool_loaded = laneData["tool_loaded"].as<bool>();
+            lane.loaded_to_hub = laneData["loaded_to_hub"].as<bool>();
+            lane.lane_index = laneData["lane"].as<int>();
+
+            const char *mat = laneData["material"];
+            if (mat) {
+                strncpy(lane.material, mat, sizeof(lane.material) - 1);
+                lane.material[sizeof(lane.material) - 1] = '\0';
+            } else {
+                lane.material[0] = '\0';
+            }
+
+            const char *col = laneData["color"];
+            if (col) {
+                strncpy(lane.color, col, sizeof(lane.color) - 1);
+                lane.color[sizeof(lane.color) - 1] = '\0';
+            } else {
+                lane.color[0] = '\0';
+            }
+
+            lane.weight = laneData["weight"].as<float>();
+            lane.spool_id = laneData["spool_id"] | -1;
+
+            DEBUG_PRINT("Lane: ");
+            DEBUG_PRINT(lane.name);
+            DEBUG_PRINT(" map=");
+            DEBUG_PRINT(lane.map);
+            DEBUG_PRINT(" load=");
+            DEBUG_PRINT(lane.load ? "true" : "false");
+            DEBUG_PRINT(" prep=");
+            DEBUG_PRINT(lane.prep ? "true" : "false");
+            DEBUG_PRINT(" tool_loaded=");
+            DEBUG_PRINT(lane.tool_loaded ? "true" : "false");
+            DEBUG_PRINT(" loaded_to_hub=");
+            DEBUG_PRINTLN(lane.loaded_to_hub ? "true" : "false");
+
+            numLanesFound++;
         }
     } else {
-        DEBUG_PRINTLN("Unit key not found in AFC.");
+        DEBUG_PRINTLN("No unit found in AFC response.");
     }
 
-    // Parsing AFC system information
+    // Parse AFC system information
     JsonObject system = afc["system"];
     if (!system.isNull()) {
         currentLoadChanged = false;
@@ -184,32 +194,35 @@ void ParseAPIResponse(const String &jsonResponse) {
             }
         }
 
-        JsonObject extruder = system["extruders"]["extruder"];
-        if (!extruder.isNull()) {
-            toolLoaded = extruder["tool_start_sensor"].as<bool>();
+        numUnits = system["num_units"] | 0;
+        numLanes = system["num_lanes"] | 0;
 
-            String buffer = extruder["buffer"].as<String>();
-            String bufferStatus = extruder["buffer_status"].as<String>();
-            DEBUG_PRINT("Tool Loaded: ");
-            DEBUG_PRINTLN(toolLoaded ? "true" : "false");
-            DEBUG_PRINT("Buffer: ");
-            DEBUG_PRINTLN(buffer);
-            DEBUG_PRINT("Buffer Status: ");
-            DEBUG_PRINTLN(bufferStatus);
+        // Parse extruder tool status
+        JsonObject extruders = system["extruders"];
+        if (!extruders.isNull()) {
+            for (JsonPair kv : extruders) {
+                JsonObject ext = kv.value().as<JsonObject>();
+                toolLoaded = ext["tool_start_status"].as<bool>();
+                DEBUG_PRINT("Tool loaded (");
+                DEBUG_PRINT(kv.key().c_str());
+                DEBUG_PRINT("): ");
+                DEBUG_PRINTLN(toolLoaded ? "true" : "false");
+                break;
+            }
         }
     } else {
         DEBUG_PRINTLN("System key not found in AFC.");
     }
-    DEBUG_PRINT("Lane 1 Status: ");
-    DEBUG_PRINTLN(leg1Load);
-    DEBUG_PRINT("Lane 2 Status: ");
-    DEBUG_PRINTLN(leg2Load);
-    DEBUG_PRINT("Lane 3 Status: ");
-    DEBUG_PRINTLN(leg3Load);
-    DEBUG_PRINT("Lane 4 Status: ");
-    DEBUG_PRINTLN(leg4Load);
+
+    DEBUG_PRINT("Lanes found: ");
+    DEBUG_PRINTLN(numLanesFound);
+    for (int i = 0; i < numLanesFound; i++) {
+        DEBUG_PRINT(lanes[i].name);
+        DEBUG_PRINT(" load=");
+        DEBUG_PRINTLN(lanes[i].load ? "true" : "false");
+    }
     DEBUG_PRINT("Tool Status: ");
     DEBUG_PRINTLN(toolLoaded ? "true" : "false");
     DEBUG_PRINT("Current Load: ");
-    DEBUG_PRINTLN(currentLoad);
+    DEBUG_PRINTLN(currentLoadBuffer);
 }

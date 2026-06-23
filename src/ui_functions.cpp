@@ -1,5 +1,6 @@
 #include "ui_functions.h"
 #include "moonraker.h"
+#include "api_fetch.h"
 
 lv_obj_t *gif_img;
 lv_color_t color;
@@ -8,14 +9,22 @@ int colorChangeState = -1;
 int selectedTool = -1;
 
 void toolChangeCall(lv_event_t * e, int toolNo){
-    char command[10];
-    snprintf(command, sizeof(command), "T%d", toolNo);
+    char command[32];
+    if (toolNo >= 0 && toolNo < numLanesFound && lanes[toolNo].map[0] != '\0') {
+        snprintf(command, sizeof(command), "CHANGE_TOOL LANE=%s", lanes[toolNo].name);
+    } else {
+        snprintf(command, sizeof(command), "T%d", toolNo);
+    }
     moonraker.post_gcode_to_queue(command);
 }
 
 void ejectLaneCall(lv_event_t * e, int toolNo){
-    char command[10];
-    snprintf(command, sizeof(command), "t%d", toolNo);
+    char command[32];
+    if (toolNo >= 0 && toolNo < numLanesFound) {
+        snprintf(command, sizeof(command), "LANE_UNLOAD LANE=%s", lanes[toolNo].name);
+    } else {
+        snprintf(command, sizeof(command), "LANE_UNLOAD LANE=lane%d", toolNo + 1);
+    }
     moonraker.post_gcode_to_queue(command);
 }
 
@@ -40,11 +49,11 @@ void afcPoopCall(lv_event_t * e){
 }
 
 void btPrepCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("BT_PREP");
+    moonraker.post_gcode_to_queue("PREP");
 }
 
 void toolUnloadCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("BT_TOOL_UNLOAD");
+    moonraker.post_gcode_to_queue("TOOL_UNLOAD");
 }
 
 void setActiveColor(lv_event_t * e){
@@ -76,14 +85,21 @@ void saveColorWheel(lv_event_t * e){
 }
 
 void SetLaneActive(lv_event_t * e, int laneActive){
-    char command[10];
-    snprintf(command, sizeof(command), "t%d", laneActive);
+    char command[32];
+    if (laneActive >= 0 && laneActive < numLanesFound) {
+        snprintf(command, sizeof(command), "CHANGE_TOOL LANE=%s", lanes[laneActive].name);
+    } else {
+        snprintf(command, sizeof(command), "T%d", laneActive);
+    }
     moonraker.post_gcode_to_queue(command);
 }
 
 void EjectLane(lv_event_t * e, int laneEject){
-    char command[20];
-    snprintf(command, sizeof(command), "BT_LANE_EJECT LANE=%d", laneEject);
+    char command[32];
+    if (laneEject >= 0 && laneEject < numLanesFound) {
+        snprintf(command, sizeof(command), "LANE_UNLOAD LANE=%s", lanes[laneEject].name);
+    } else {
+        snprintf(command, sizeof(command), "LANE_UNLOAD LANE=lane%d", laneEject + 1);
+    }
     moonraker.post_gcode_to_queue(command);
-    
 }

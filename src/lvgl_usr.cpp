@@ -34,7 +34,14 @@ uint32_t lv_color_to_hex(lv_color_t color) {
 }
 
 void lvgl_set_current_leg() {
-   if (currentLoadBuffer != nullptr)activeLane = atoi(&currentLoadBuffer[3]);
+    activeLane = -1;
+    if (currentLoadBuffer[0] == '\0') return;
+    for (int i = 0; i < numLanesFound; i++) {
+        if (strcmp(currentLoadBuffer, lanes[i].name) == 0) {
+            activeLane = i + 1;
+            return;
+        }
+    }
 }
 
 void lvgl_set_tool_status(){
@@ -46,8 +53,8 @@ void lvgl_set_tool_status(){
 
 void lvgl_set_hub_status(){
     const char *hubStatus = lv_label_get_text(ui_HubStatus);
-    if (strcmp(hubStatus, booleanHelper(loadedToHub)) != 0){
-        lv_label_set_text(ui_HubStatus, booleanHelper(loadedToHub));
+    if (strcmp(hubStatus, booleanHelper(hubLoaded)) != 0){
+        lv_label_set_text(ui_HubStatus, booleanHelper(hubLoaded));
     }
 }
 
@@ -71,14 +78,14 @@ void lvgl_set_active_lane_color(){
 }
 
 void lvgl_set_leg_status(){
-    if(leg1Load){lv_obj_set_style_bg_color(ui_Tool0Button, loadedColor, LV_PART_MAIN);}
-    else{lv_obj_set_style_bg_color(ui_Tool0Button, unloadedColor, LV_PART_MAIN);}
-    if(leg2Load){lv_obj_set_style_bg_color(ui_Tool1Button, loadedColor, LV_PART_MAIN);}
-    else{lv_obj_set_style_bg_color(ui_Tool1Button, unloadedColor, LV_PART_MAIN);}
-    if(leg3Load){lv_obj_set_style_bg_color(ui_Tool2Button, loadedColor, LV_PART_MAIN);}
-    else{lv_obj_set_style_bg_color(ui_Tool2Button, unloadedColor, LV_PART_MAIN);}
-    if(leg4Load){lv_obj_set_style_bg_color(ui_Tool3Button, loadedColor, LV_PART_MAIN);}
-    else{lv_obj_set_style_bg_color(ui_Tool3Button, unloadedColor, LV_PART_MAIN);}
+    lv_obj_t *buttons[] = {ui_Tool0Button, ui_Tool1Button, ui_Tool2Button, ui_Tool3Button};
+    for (int i = 0; i < numLanesFound && i < MAX_LANES; i++) {
+        if (lanes[i].load) {
+            lv_obj_set_style_bg_color(buttons[i], loadedColor, LV_PART_MAIN);
+        } else {
+            lv_obj_set_style_bg_color(buttons[i], unloadedColor, LV_PART_MAIN);
+        }
+    }
     lvgl_set_active_lane_color();
 }
 
