@@ -49,37 +49,46 @@ void setupWebSite(){
         } });
 
     server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/html", upload_html);  
-        });
+        request->send(200, "text/html", upload_html);
+    });
+
     server.on(
     "/update", HTTP_POST, [](AsyncWebServerRequest *request) {
         bool updateSuccess = !Update.hasError();
+        AsyncWebServerResponse *response = request->beginResponse(
+            updateSuccess ? 200 : 500, "text/plain",
+            updateSuccess ? "Update complete. Rebooting..." : "Update failed. Please try again."
+        );
+        response->addHeader("Connection", "close");
+        request->send(response);
         if (updateSuccess) {
-            request->send(200, "text/plain", "Update complete. Rebooting...");
-            delay(500);
+            // Give the response time to flush before restarting
+            delay(1000);
             ESP.restart();
-        } else {
-            request->send(500, "text/plain", "Update failed.");
         }
     },
     [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         if (index == 0) {
-            Serial.printf("Starting OTA update: %s\n", filename.c_str());
-
+            Serial.printf("OTA update starting: %s\n", filename.c_str());
             suspendTasks();
-
             if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
                 Update.printError(Serial);
+                request->send(500, "text/plain", "Not enough space for update");
+                return;
             }
         }
-        
+
+        if (Update.hasError()) return;
+
         if (Update.write(data, len) != len) {
             Update.printError(Serial);
+            Update.abort();
+            return;
         }
 
         if (final) {
             if (Update.end(true)) {
-                Serial.printf("OTA update completed successfully.\n");
+                Serial.printf("OTA update success: %u bytes\n", index + len);
             } else {
                 Update.printError(Serial);
             }
