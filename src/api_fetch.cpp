@@ -1,4 +1,5 @@
 #include "api_fetch.h"
+#include "afc_config.h"
 
 String apiURL;
 float eventTime;
@@ -72,11 +73,14 @@ void ParseAPIResponse(const String &jsonResponse) {
         return;
     }
 
-    // The webhook returns {"status:": {"AFC": { ... }}}
-    JsonObject afc = doc["status:"]["AFC"];
+    // Use configurable status key (defaults to "status:")
+    JsonObject afc = doc[afcConfig.fields.status_key]["AFC"];
     if (afc.isNull()) {
-        // Fallback: try without colon in case firmware changes
+        // Fallback: try alternate key
         afc = doc["status"]["AFC"];
+    }
+    if (afc.isNull()) {
+        afc = doc["status:"]["AFC"];
     }
     if (afc.isNull()) {
         DEBUG_PRINTLN("AFC key not found in response.");
@@ -98,8 +102,8 @@ void ParseAPIResponse(const String &jsonResponse) {
         // Get unit system info
         JsonObject unitSystem = unitObj["system"];
         if (!unitSystem.isNull()) {
-            hubLoaded = unitSystem["hub_loaded"].as<bool>();
-            const char *type = unitSystem["type"];
+            hubLoaded = unitSystem[afcConfig.fields.unit_hub_loaded].as<bool>();
+            const char *type = unitSystem[afcConfig.fields.unit_type];
             if (type) {
                 strncpy(unitType, type, sizeof(unitType) - 1);
                 unitType[sizeof(unitType) - 1] = '\0';
@@ -123,7 +127,7 @@ void ParseAPIResponse(const String &jsonResponse) {
             strncpy(lane.name, key.c_str(), LANE_NAME_LEN - 1);
             lane.name[LANE_NAME_LEN - 1] = '\0';
 
-            const char *mapVal = laneData["map"];
+            const char *mapVal = laneData[afcConfig.fields.lane_map];
             if (mapVal) {
                 strncpy(lane.map, mapVal, sizeof(lane.map) - 1);
                 lane.map[sizeof(lane.map) - 1] = '\0';
@@ -131,13 +135,13 @@ void ParseAPIResponse(const String &jsonResponse) {
                 lane.map[0] = '\0';
             }
 
-            lane.load = laneData["load"].as<bool>();
-            lane.prep = laneData["prep"].as<bool>();
-            lane.tool_loaded = laneData["tool_loaded"].as<bool>();
-            lane.loaded_to_hub = laneData["loaded_to_hub"].as<bool>();
-            lane.lane_index = laneData["lane"].as<int>();
+            lane.load = laneData[afcConfig.fields.lane_load].as<bool>();
+            lane.prep = laneData[afcConfig.fields.lane_prep].as<bool>();
+            lane.tool_loaded = laneData[afcConfig.fields.lane_tool_loaded].as<bool>();
+            lane.loaded_to_hub = laneData[afcConfig.fields.lane_hub_loaded].as<bool>();
+            lane.lane_index = laneData[afcConfig.fields.lane_index].as<int>();
 
-            const char *mat = laneData["material"];
+            const char *mat = laneData[afcConfig.fields.lane_material];
             if (mat) {
                 strncpy(lane.material, mat, sizeof(lane.material) - 1);
                 lane.material[sizeof(lane.material) - 1] = '\0';
@@ -145,7 +149,7 @@ void ParseAPIResponse(const String &jsonResponse) {
                 lane.material[0] = '\0';
             }
 
-            const char *col = laneData["color"];
+            const char *col = laneData[afcConfig.fields.lane_color];
             if (col) {
                 strncpy(lane.color, col, sizeof(lane.color) - 1);
                 lane.color[sizeof(lane.color) - 1] = '\0';
@@ -153,8 +157,8 @@ void ParseAPIResponse(const String &jsonResponse) {
                 lane.color[0] = '\0';
             }
 
-            lane.weight = laneData["weight"].as<float>();
-            lane.spool_id = laneData["spool_id"] | -1;
+            lane.weight = laneData[afcConfig.fields.lane_weight].as<float>();
+            lane.spool_id = laneData[afcConfig.fields.lane_spool_id] | -1;
 
             DEBUG_PRINT("Lane: ");
             DEBUG_PRINT(lane.name);
@@ -179,7 +183,7 @@ void ParseAPIResponse(const String &jsonResponse) {
     JsonObject system = afc["system"];
     if (!system.isNull()) {
         currentLoadChanged = false;
-        currentLoad = system["current_load"].as<const char *>();
+        currentLoad = system[afcConfig.fields.sys_current_load].as<const char *>();
 
         if (currentLoad == nullptr) {
             if (currentLoadBuffer[0] != '\0') {
@@ -194,15 +198,15 @@ void ParseAPIResponse(const String &jsonResponse) {
             }
         }
 
-        numUnits = system["num_units"] | 0;
-        numLanes = system["num_lanes"] | 0;
+        numUnits = system[afcConfig.fields.sys_num_units] | 0;
+        numLanes = system[afcConfig.fields.sys_num_lanes] | 0;
 
         // Parse extruder tool status
         JsonObject extruders = system["extruders"];
         if (!extruders.isNull()) {
             for (JsonPair kv : extruders) {
                 JsonObject ext = kv.value().as<JsonObject>();
-                toolLoaded = ext["tool_start_status"].as<bool>();
+                toolLoaded = ext[afcConfig.fields.ext_tool_status].as<bool>();
                 DEBUG_PRINT("Tool loaded (");
                 DEBUG_PRINT(kv.key().c_str());
                 DEBUG_PRINT("): ");

@@ -1,4 +1,6 @@
 #include "wifi_manager.h"
+#include "afc_config.h"
+#include "web_config_page.h"
 
 const char *apSSID = "DeviceSetupAP";
 const char *apPassword = "setup1234";
@@ -15,11 +17,10 @@ void suspendTasks() {
     if (apiFetchTaskHandle != NULL) vTaskSuspend(apiFetchTaskHandle);
     if (lvglUiTaskHandle != NULL) vTaskSuspend(lvglUiTaskHandle);
     if (postTaskHandle != NULL) vTaskSuspend(postTaskHandle);
-    if (apiFetchTaskHandle != NULL) vTaskSuspend(apiFetchTaskHandle);
 }
 
 void setupWebSite(){
-    
+
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", webpage_html); });
 
@@ -33,7 +34,7 @@ void setupWebSite(){
             saveCredentials(targetSSID, targetPassword, targetHost);
             DEBUG_PRINT("Host set as:");
 
-            apiURL = "http://" + targetHost + "/printer/objects/query?AFC";
+            apiURL = "http://" + targetHost + afcConfig.endpoint;
             DEBUG_PRINTLN(apiURL);
 
             if (xTaskCreate(connectToWiFiTask, "WiFi Connect Task", 4096, NULL, 8, &WifITaskHandle) != pdPASS) {
@@ -62,7 +63,6 @@ void setupWebSite(){
         response->addHeader("Connection", "close");
         request->send(response);
         if (updateSuccess) {
-            // Give the response time to flush before restarting
             delay(1000);
             ESP.restart();
         }
@@ -95,8 +95,89 @@ void setupWebSite(){
         }
     });
 
+    // AFC Config page
+    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", config_html);
+    });
+
+    // API: Get current config as JSON
+    server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String json = afc_config_to_json();
+        request->send(200, "application/json", json);
+    });
+
+    // API: Save config from JSON body
+    server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL,
+        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            static String body;
+            if (index == 0) body = "";
+            body += String((char*)data).substring(0, len);
+            if (index + len == total) {
+                if (afc_config_from_json(body)) {
+                    afc_config_save();
+                    // Update the API URL with new endpoint
+                    if (!targetHost.isEmpty()) {
+                        apiURL = "http://" + targetHost + afcConfig.endpoint;
+                    }
+                    request->send(200, "text/plain", "Config saved successfully");
+                } else {
+                    request->send(400, "text/plain", "Invalid config JSON");
+                }
+                body = "";
+            }
+        });
+
+    // API: Reset config to defaults
+    server.on("/api/config/reset", HTTP_POST, [](AsyncWebServerRequest *request) {
+        afc_config_set_defaults();
+        afc_config_save();
+        if (!targetHost.isEmpty()) {
+            apiURL = "http://" + targetHost + afcConfig.endpoint;
+        }
+        request->send(200, "text/plain", "Config reset to defaults");
+    });
+
+    // API: Fetch remote config
+    server.on("/api/config/fetch", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!request->hasParam("url")) {
+            request->send(400, "text/plain", "Missing 'url' parameter");
+            return;
+        }
+        String url = request->getParam("url")->value();
+        if (afc_config_fetch_remote(url)) {
+            if (!targetHost.isEmpty()) {
+                apiURL = "http://" + targetHost + afcConfig.endpoint;
+            }
+            request->send(200, "text/plain", "Remote config applied and saved");
+        } else {
+            request->send(500, "text/plain", "Failed to fetch or parse remote config");
+        }
+    });
+
+    // API: Get live data from printer AFC endpoint
+    server.on("/api/live", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (targetHost.isEmpty()) {
+            request->send(400, "text/plain", "No printer host configured");
+            return;
+        }
+        HTTPClient http;
+        String url = "http://" + targetHost + afcConfig.endpoint;
+        http.begin(url);
+        http.setTimeout(5000);
+        int code = http.GET();
+        if (code == 200) {
+            String payload = http.getString();
+            http.end();
+            request->send(200, "application/json", payload);
+        } else {
+            http.end();
+            request->send(502, "text/plain", "Printer returned HTTP " + String(code));
+        }
+    });
+
     server.begin();
 }
+
 void setupWiFiAP()
 {
     WiFi.softAP(apSSID, apPassword);
@@ -124,7 +205,7 @@ void connectToWiFiTask(void *pvParameters)
         DEBUG_PRINT("IP address: ");
         DEBUG_PRINTLN(WiFi.localIP());
 
-        apiURL = "http://" + targetHost + "/printer/afc/status";
+        apiURL = "http://" + targetHost + afcConfig.endpoint;
 
         if (xTaskCreate(fetchDataTask, "Data Fetch Task", 4096, NULL, 8, &apiFetchTaskHandle) != pdPASS)
         {
@@ -150,19 +231,17 @@ void loadCredentials()
     {
         DEBUG_PRINTLN("Loaded Wi-Fi credentials and target host from memory.");
         DEBUG_PRINT("SSID: ");
-        DEBUG_PRINTLN(targetSSID); // Print SSID
+        DEBUG_PRINTLN(targetSSID);
         DEBUG_PRINT("Password: ");
-        DEBUG_PRINTLN(targetPassword); // Print Password
+        DEBUG_PRINTLN(targetPassword);
         DEBUG_PRINT("Host: ");
         DEBUG_PRINTLN(targetHost);
 
-        // Begin Wi-Fi connection
         WiFi.begin(targetSSID.c_str(), targetPassword.c_str());
 
-        // Construct the API URL from the saved host
-        apiURL = "http://" + targetHost + "/printer/afc/status";
-        
-        DEBUG_PRINTLN("API URL: " + apiURL); // Print API URL for debugging
+        apiURL = "http://" + targetHost + afcConfig.endpoint;
+
+        DEBUG_PRINTLN("API URL: " + apiURL);
     }
     else
     {

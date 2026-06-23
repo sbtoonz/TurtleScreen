@@ -1,6 +1,7 @@
 #include "ui_functions.h"
 #include "moonraker.h"
 #include "api_fetch.h"
+#include "afc_config.h"
 
 lv_obj_t *gif_img;
 lv_color_t color;
@@ -9,9 +10,9 @@ int colorChangeState = -1;
 int selectedTool = -1;
 
 void toolChangeCall(lv_event_t * e, int toolNo){
-    char command[32];
+    char command[48];
     if (toolNo >= 0 && toolNo < numLanesFound && lanes[toolNo].map[0] != '\0') {
-        snprintf(command, sizeof(command), "CHANGE_TOOL LANE=%s", lanes[toolNo].name);
+        snprintf(command, sizeof(command), "%s LANE=%s", afcConfig.commands.tool_change, lanes[toolNo].name);
     } else {
         snprintf(command, sizeof(command), "T%d", toolNo);
     }
@@ -19,41 +20,41 @@ void toolChangeCall(lv_event_t * e, int toolNo){
 }
 
 void ejectLaneCall(lv_event_t * e, int toolNo){
-    char command[32];
+    char command[48];
     if (toolNo >= 0 && toolNo < numLanesFound) {
-        snprintf(command, sizeof(command), "LANE_UNLOAD LANE=%s", lanes[toolNo].name);
+        snprintf(command, sizeof(command), "%s LANE=%s", afcConfig.commands.lane_unload, lanes[toolNo].name);
     } else {
-        snprintf(command, sizeof(command), "LANE_UNLOAD LANE=lane%d", toolNo + 1);
+        snprintf(command, sizeof(command), "%s LANE=lane%d", afcConfig.commands.lane_unload, toolNo + 1);
     }
     moonraker.post_gcode_to_queue(command);
 }
 
 void afcBrushCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("AFC_BRUSH");
+    moonraker.post_gcode_to_queue(afcConfig.commands.brush);
 }
 
 void afcCutCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("AFC_CUT");
+    moonraker.post_gcode_to_queue(afcConfig.commands.cut);
 }
 
 void afcKickCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("AFC_KICK");
+    moonraker.post_gcode_to_queue(afcConfig.commands.kick);
 }
 
 void afcParkCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("AFC_PARK");
+    moonraker.post_gcode_to_queue(afcConfig.commands.park);
 }
 
 void afcPoopCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("AFC_POOP");
+    moonraker.post_gcode_to_queue(afcConfig.commands.poop);
 }
 
 void btPrepCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("PREP");
+    moonraker.post_gcode_to_queue(afcConfig.commands.prep);
 }
 
 void toolUnloadCall(lv_event_t * e){
-    moonraker.post_gcode_to_queue("TOOL_UNLOAD");
+    moonraker.post_gcode_to_queue(afcConfig.commands.tool_unload);
 }
 
 void setActiveColor(lv_event_t * e){
@@ -85,9 +86,9 @@ void saveColorWheel(lv_event_t * e){
 }
 
 void SetLaneActive(lv_event_t * e, int laneActive){
-    char command[32];
+    char command[48];
     if (laneActive >= 0 && laneActive < numLanesFound) {
-        snprintf(command, sizeof(command), "CHANGE_TOOL LANE=%s", lanes[laneActive].name);
+        snprintf(command, sizeof(command), "%s LANE=%s", afcConfig.commands.tool_change, lanes[laneActive].name);
     } else {
         snprintf(command, sizeof(command), "T%d", laneActive);
     }
@@ -95,11 +96,11 @@ void SetLaneActive(lv_event_t * e, int laneActive){
 }
 
 void EjectLane(lv_event_t * e, int laneEject){
-    char command[32];
+    char command[48];
     if (laneEject >= 0 && laneEject < numLanesFound) {
-        snprintf(command, sizeof(command), "LANE_UNLOAD LANE=%s", lanes[laneEject].name);
+        snprintf(command, sizeof(command), "%s LANE=%s", afcConfig.commands.lane_unload, lanes[laneEject].name);
     } else {
-        snprintf(command, sizeof(command), "LANE_UNLOAD LANE=lane%d", laneEject + 1);
+        snprintf(command, sizeof(command), "%s LANE=lane%d", afcConfig.commands.lane_unload, laneEject + 1);
     }
     moonraker.post_gcode_to_queue(command);
 }

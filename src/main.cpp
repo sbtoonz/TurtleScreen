@@ -5,6 +5,7 @@
 #include "lvgl_usr.h"
 #include "moonraker.h"
 #include "watchdog.h"
+#include "afc_config.h"
 #include <Update.h>
 #include <esp_task_wdt.h>
 
@@ -17,6 +18,8 @@ void setup()
     esp_task_wdt_init(30, true);
     delay(1000);
     Serial.println("Starting up... \n");
+
+    afc_config_init();
 
     preferences.begin("wifi-config", false);
     loadCredentials();

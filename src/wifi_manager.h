@@ -6,16 +6,15 @@
 #include <ESPAsyncWebServer.h>
 #include <HTTPClient.h>
 #include "api_fetch.h"
-#include <Preferences.h>
 #include <Update.h>
 #include "lvgl_usr.h"
 #include "web_page.h"
 #include "watchdog.h"
 
-extern const char* apSSID;          // SSID for AP
-extern const char* apPassword;      // Password for AP
-extern Preferences preferences;      // Extern declaration
-extern AsyncWebServer server;        // Extern declaration
+extern const char* apSSID;
+extern const char* apPassword;
+extern Preferences preferences;
+extern AsyncWebServer server;
 extern TaskHandle_t WifITaskHandle;
 
 void setupWiFiAP();
@@ -26,11 +25,7 @@ void saveCredentials(const String& ssid, const String& password, const String& h
 
 extern String targetSSID;
 extern String targetPassword;
-extern String targetSSID;
-extern String targetPassword;
 extern String targetHost;
 extern String apiURL;
-
-
 
 #endif // WIFI_MANAGER_H
